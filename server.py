@@ -101,7 +101,7 @@ class GameServer:
     async def start_server(self):
         """Start the WebSocket server."""
         server = await websockets.serve(
-            self.handle_client, HOST, PORT, ping_interval=60, ping_timeout=120
+            self.handle_client, HOST, PORT, ping_interval=30, ping_timeout=60
         )
         logger.info(f"WebSocket server running on {HOST}:{PORT}")
         return server
