@@ -85,9 +85,9 @@ class GameServer:
     async def handle_disconnect(self, websocket):
         """Remove disconnected client from the lobby."""
         if websocket in self.clients:
-            player_name, lobby_code = self.clients.pop(websocket)
+            player_name, lobby_code = self.clients.pop(websocket, (None, None))
 
-            if lobby_code in self.lobbies and websocket in self.lobbies[lobby_code]:
+            if lobby_code and lobby_code in self.lobbies:
                 self.lobbies[lobby_code].remove(websocket)
 
                 if not self.lobbies[lobby_code]:  # Remove empty lobby
@@ -101,7 +101,7 @@ class GameServer:
     async def start_server(self):
         """Start the WebSocket server."""
         server = await websockets.serve(
-            self.handle_client, HOST, PORT, ping_interval=30, ping_timeout=60
+            self.handle_client, HOST, PORT, ping_interval=60, ping_timeout=120
         )
         logger.info(f"WebSocket server running on {HOST}:{PORT}")
         return server
@@ -118,6 +118,5 @@ if __name__ == "__main__":
     except KeyboardInterrupt:
         logger.info("Shutting down server...")
     finally:
-        server_task.close()
-        loop.run_until_complete(server_task.wait_closed())
+        loop.run_until_complete(asyncio.gather(server_task.wait_closed()))
         loop.close()
