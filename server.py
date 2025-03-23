@@ -10,50 +10,38 @@ import logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# Server settings - use Render's environment variables
-HOST = '0.0.0.0'
-PORT = int(os.environ.get('PORT', 10000))
+# Use Render's assigned PORT (default: 10000)
+HOST = "0.0.0.0"
+PORT = int(os.environ.get("PORT", 10000))
 
 class GameServer:
     def __init__(self):
         self.clients = {}  # websocket -> (name, lobby_code)
         self.lobbies = {}  # lobby_code -> [websockets]
-        logger.info(f"Server initialized, ready to accept connections on port {PORT}")
+        logger.info(f"Server initialized on port {PORT}")
 
     def generate_lobby_code(self):
-        code = ''.join(random.choices(string.ascii_uppercase, k=4))
-        while code in self.lobbies:
-            code = ''.join(random.choices(string.ascii_uppercase, k=4))
-        return code
+        """Generate a unique 4-character lobby code."""
+        while True:
+            code = "".join(random.choices(string.ascii_uppercase, k=4))
+            if code not in self.lobbies:
+                return code
 
     async def update_player_list(self, lobby_code):
+        """Notify all players in a lobby of the updated player list."""
         if lobby_code not in self.lobbies:
             return
-        
+
         players = [self.clients[client][0] for client in self.lobbies[lobby_code]]
+        message = json.dumps({"type": "player_list", "players": players})
 
-        message = json.dumps({
-            "type": "player_list",
-            "players": players
-        })
-
-        # Send message to all players, handling disconnects
-        disconnected_clients = []
-        for client in self.lobbies[lobby_code]:
-            try:
-                await client.send(message)
-            except websockets.exceptions.ConnectionClosedError:
-                disconnected_clients.append(client)
-
-        # Remove disconnected clients
-        for client in disconnected_clients:
-            await self.handle_disconnect(client)
-
+        await asyncio.gather(*[client.send(message) for client in self.lobbies[lobby_code]])
         logger.info(f"Updated player list for lobby {lobby_code}: {players}")
 
-    async def handle_client(self, websocket: websockets.WebSocketServerProtocol, path):
+    async def handle_client(self, websocket, path):
+        """Handle WebSocket connections from clients."""
         try:
-            logger.info(f"New connection established")
+            logger.info("New WebSocket connection established")
 
             async for message in websocket:
                 try:
@@ -63,16 +51,13 @@ class GameServer:
                         player_name = msg["name"]
                         lobby_code = self.generate_lobby_code()
 
+                        # Store client and create lobby
                         self.clients[websocket] = (player_name, lobby_code)
                         self.lobbies[lobby_code] = [websocket]
 
-                        await websocket.send(json.dumps({
-                            "type": "lobby_created",
-                            "code": lobby_code
-                        }))
-
+                        await websocket.send(json.dumps({"type": "lobby_created", "code": lobby_code}))
                         await self.update_player_list(lobby_code)
-                        logger.info(f"Lobby created: {lobby_code} by {player_name}")
+                        logger.info(f"Lobby {lobby_code} created by {player_name}")
 
                     elif msg["type"] == "join_lobby":
                         player_name = msg["name"]
@@ -82,47 +67,43 @@ class GameServer:
                             self.clients[websocket] = (player_name, lobby_code)
                             self.lobbies[lobby_code].append(websocket)
 
-                            await websocket.send(json.dumps({
-                                "type": "lobby_joined"
-                            }))
-
+                            await websocket.send(json.dumps({"type": "lobby_joined"}))
                             await self.update_player_list(lobby_code)
                             logger.info(f"Player {player_name} joined lobby {lobby_code}")
                         else:
-                            await websocket.send(json.dumps({
-                                "type": "join_failed"
-                            }))
-                            logger.info(f"Failed join attempt: lobby {lobby_code} doesn't exist")
+                            await websocket.send(json.dumps({"type": "join_failed"}))
+                            logger.info(f"Failed join attempt: Lobby {lobby_code} doesn't exist")
 
                 except json.JSONDecodeError:
                     logger.error(f"Invalid JSON received: {message}")
 
-        except (websockets.exceptions.ConnectionClosed, websockets.exceptions.ConnectionClosedError):
-            logger.info("Connection closed")
+        except websockets.exceptions.ConnectionClosed:
+            logger.info("Client disconnected")
         finally:
             await self.handle_disconnect(websocket)
 
     async def handle_disconnect(self, websocket):
+        """Remove disconnected client from the lobby."""
         if websocket in self.clients:
-            player_name, lobby_code = self.clients[websocket]
+            player_name, lobby_code = self.clients.pop(websocket)
 
             if lobby_code in self.lobbies and websocket in self.lobbies[lobby_code]:
                 self.lobbies[lobby_code].remove(websocket)
 
-                if not self.lobbies[lobby_code]:
+                if not self.lobbies[lobby_code]:  # Remove empty lobby
                     del self.lobbies[lobby_code]
                     logger.info(f"Lobby {lobby_code} removed (empty)")
                 else:
                     await self.update_player_list(lobby_code)
 
-            del self.clients[websocket]
             logger.info(f"Player {player_name} disconnected from lobby {lobby_code}")
 
     async def start_server(self):
+        """Start the WebSocket server."""
         server = await websockets.serve(
-            self.handle_client, HOST, PORT, ping_interval=None, ping_timeout=None
+            self.handle_client, HOST, PORT, ping_interval=30, ping_timeout=60
         )
-        logger.info(f"Server started on {HOST}:{PORT}")
+        logger.info(f"WebSocket server running on {HOST}:{PORT}")
         return server
 
 if __name__ == "__main__":
@@ -135,7 +116,7 @@ if __name__ == "__main__":
         logger.info("Server is running. Press Ctrl+C to stop.")
         loop.run_forever()
     except KeyboardInterrupt:
-        logger.info("Server shutting down...")
+        logger.info("Shutting down server...")
     finally:
         server_task.close()
         loop.run_until_complete(server_task.wait_closed())
