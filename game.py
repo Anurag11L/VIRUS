@@ -22,7 +22,7 @@ GREEN = (0, 200, 0)
 RED = (255, 0, 0)
 
 # Server settings - update this with your Render URL
-SERVER_URL = "https://virus-kuw5.onrender.com"  # Replace with your actual Render URL
+SERVER_URL = "wss://virus-kuw5.onrender.com"  # Replace with your actual Render URL
 
 # Fonts
 TITLE_FONT = pygame.font.SysFont('arial', 50)

@@ -13,7 +13,7 @@ logger = logging.getLogger(__name__)
 
 # Server settings - use Render's environment variables
 HOST = '0.0.0.0'
-PORT = int(os.environ.get('PORT', 8080))
+PORT = int(os.environ.get('PORT', 8000))
 
 class GameServer:
     def __init__(self):
