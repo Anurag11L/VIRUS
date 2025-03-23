@@ -1,0 +1,2 @@
+websockets==11.0.3
+pygame==2.5.2
