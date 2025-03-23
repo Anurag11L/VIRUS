@@ -13,7 +13,7 @@ logger = logging.getLogger(__name__)
 
 # Server settings - use Render's environment variables
 HOST = '0.0.0.0'
-PORT = int(os.environ.get('PORT', 8000))
+PORT = int(os.environ.get('PORT', 10000))
 
 class GameServer:
     def __init__(self):
@@ -46,7 +46,7 @@ class GameServer:
         )
         logger.info(f"Updated player list for lobby {lobby_code}: {players}")
     
-    async def handle_client(self, websocket, path):
+    async def handle_client(self, websocket: websockets.WebSocketServerProtocol, path):
         try:
             logger.info(f"New connection established")
             
@@ -129,9 +129,12 @@ class GameServer:
             logger.info(f"Player {player_name} disconnected from lobby {lobby_code}")
 
     async def start_server(self):
-        server = await websockets.serve(self.handle_client, HOST, PORT)
+        server = await websockets.serve(
+            self.handle_client, HOST, PORT, ping_interval=None, ping_timeout=None
+        )
         logger.info(f"Server started on {HOST}:{PORT}")
         return server
+
 
 # For running on Render
 if __name__ == "__main__":
